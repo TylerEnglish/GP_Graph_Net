@@ -140,12 +140,84 @@ for epoch in range(num_epochs):
     ''','python')
     st.header("GCN")
     st.code('''
+class myGCNConv(MessagePassing):
+    def __init__(self, in_channels, hidden_channels, out_channels):
+        super(myGCNConv, self).__init__(aggr='add')
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channels)
 
+    def forward(self, x, edge_index):
+        # Step 1: Add self-loops
+        # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        
+        x = F.relu(self.conv1(x, edge_index))
+        x = self.conv2(x, edge_index)
+
+        # Step 3: Calculate the normalization
+        row, col = edge_index
+        deg = degree(row, x.size(0), dtype=x.dtype)
+        deg_inv_sqrt = deg.pow(-0.5)
+        norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+
+        # Step 4: Propagate the embeddings to the next layer
+        x = self.propagate(edge_index, size=(x.size(0), x.size(0)), x=x, norm=norm)
+
+        # Step 5: Apply global max pooling
+        x = self.aggregate(x, torch.zeros(x.size(0), dtype=torch.long, device=device))
+
+        # Step 6: Apply classifier
+        # x = self.classifier(x)
+        return x
+
+
+    def message(self, x_j, norm):
+        # Normalize node features.
+        return norm.view(-1, 1) * x_j
     ''', 'python')
 
     st.subheader('Training')
     st.code('''
+for epoch in range(num_epochs):
+    gnn.train()
+    train_loss = 0
+    for graph in train_data:
+        # print(batch)
+        optimizer.zero_grad()
+        x_hat = gnn(graph.x.float().to(device), graph.edge_index.to(device))
+        # print("x_hat shape:", x_hat.shape)
+        # print("batch.y shape:", batch.y.float().to(device).shape)
+        
 
+        loss = criterion(x_hat[0], graph.y.to(device))
+
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item() #* batch.num_graphs
+        # print("=", end="")
+    
+    train_loss /= len(train_data)
+    print("")
+    
+    gnn.eval()
+    val_loss = 0
+    for graph in val_data:
+        with torch.no_grad():
+            x_hat = gnn(graph.x.float().to(device), graph.edge_index.to(device))
+            loss = criterion(x_hat[0], graph.y.to(device))
+
+            val_loss += loss.item() #* batch.num_graphs
+            # print(">", end="")
+    
+    val_loss /= len(val_data)
+
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(gnn.state_dict(), './data/gcn_model.pt')
+
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+    print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+    scheduler.step()
     ''','python')
 
 
