@@ -8,6 +8,8 @@ from torch_geometric.utils import add_self_loops, degree
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import networkx as nx
+from torch_geometric.utils import to_networkx
+from torch_geometric.data import Data
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -72,7 +74,7 @@ best_val_loss = float('inf')
 
 train_losses, val_losses = [], []
 
-for epoch in range(5):
+for epoch in range(1):
     gnn.train()
     train_loss = 0
     for batch in train_loader:
@@ -127,29 +129,79 @@ plt.savefig('./data/gae_loss.png')
 
 
 # Print out test input, Wanna explore test_loader data
-# with torch.no_grad():
-#     batch = next(iter(test_loader))
-#     x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+i = 0
+graphs = []
+single_input = []
+for batch in test_loader:
+    if i < 10:
+        networkx_graph = to_networkx(batch)
+        print(type(networkx_graph))
+        graphs.append(networkx_graph)
 
-# G1 = nx.Graph()
-# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
-#     G1.add_edge(u.item(), v.item(), weight=batch.x[i].item())
+        single_input.append(batch)
+        print(batch)
+    i+=1
 
-# G2 = nx.Graph()
-# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
-#     G2.add_edge(u.item(), v.item(), weight=x_hat[i].item())
+# display input
+import os
+if not os.path.exists('./data/pics'):
+    os.makedirs('./data/pics')
 
-# pos = nx.spring_layout(G1, seed=42)
+plt.figure(figsize=(15, 5))
+for i in range(len(single_input)):
+    plt.subplot(2, 5, i+1)
+    nx.draw(graphs[i])
 
-# # Plot input graph
-# fig, ax = plt.subplots(figsize=(10, 10))
-# nx.draw_networkx(G1, pos, node_color=batch.x.tolist(), with_labels=False, ax=ax)
-# ax.set_title('Input Graph')
+plt.savefig(f'./data/pics/input_charts.png')
 
-# # Plot output graph
-# fig, ax = plt.subplots(figsize=(10, 10))
-# nx.draw_networkx(G2, pos, node_color=x_hat.tolist(), with_labels=False, ax=ax)
-# ax.set_title('Output Graph')
+data =  Data(x=single_input[0].x, edge_index=single_input[0].edge_index)
+print("\nSample data point:")
+print("Number of nodes:", data.num_nodes)
+print("Node features shape:", data.x.shape)
+print("Edge features shape:", data.edge_index.shape)
+print("Edges:", data.edge_index)
+print(data)
 
-# plt.savefig('./data/gaecompare_chart.png')
-# plt.show()
+
+# feed in each data point through model and output it
+# gnn.eval()
+# i = 0
+# o_graphs = []
+# single_output = []
+# for batch in test_loader:
+#     if i < 10:
+#         with torch.no_grad():
+#             x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+#             # output the predicted values
+#             print("Input:", batch.x)
+#             print("Output:", x_hat)
+
+
+# Feed in each data point through model and output it
+gnn.eval()
+i = 0
+o_graphs = []
+single_output = []
+
+for batch in test_loader:
+    if i < 10:
+        with torch.no_grad():
+            x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+            # Output the predicted values
+            print("Input:", batch.x)
+            print("Output:", x_hat)
+            
+            # Store input and output values
+            single_output.append(x_hat.cpu())
+            
+            # Convert output tensor to networkx graph
+            output_graph = to_networkx(Data(x=x_hat.cpu(), edge_index=batch.edge_index.cpu()))
+            o_graphs.append(output_graph)
+    i += 1
+
+
+for i in range(len(single_output)):
+    plt.subplot(2, 5, i+1)
+    nx.draw(o_graphs[i])
+
+plt.savefig(f'./data/pics/out_charts.png')
