@@ -13,8 +13,9 @@ import os
 def welcome_page():
     st.write("# GNNs for Drug Discovery: Analyzing Zinc Database")
     st.write("Today, we'll be discussing how a Graph Neural Network, or GNN, can be used to analyze the Zinc database and identify potential drug candidates. The Zinc database is a large collection of purchasable compounds that can be used for drug discovery. However, identifying potential drug candidates from this database is a challenging task, as the compounds are represented as nodes in a graph with various relationships, such as similarity or chemical properties, represented as edges in the graph.")
-    st.write("## What we are trying to solve")
+    st.write("To overcome these challenges, we can use a GNN to learn representations of the compounds that take into account their relationships with each other. This allows us to identify potential drug candidates that may have been missed by traditional methods.")
     st.write("Our objective is to use a Graph Neural Network (GNN) to analyze the Zinc database and identify potential drug candidates. The Zinc database is a large collection of purchasable compounds that can be used for drug discovery, but traditional methods of identifying potential drug candidates from this database are limited. By leveraging the graph structure of the database and using a GNN, we aim to overcome these limitations and discover new drugs that could save lives.")
+    st.write("## What we are trying to solve")
 
 
 welcome_page()
