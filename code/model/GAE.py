@@ -1,49 +1,71 @@
 import pickle
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, GAE
+from torch_geometric.nn import GCNConv
+from torch_geometric.data import DataLoader
+from torch_geometric.nn import MessagePassing
+from torch_geometric.utils import add_self_loops, degree
 
-with open('./data/dataset.pkl', 'rb') as f:
-    dataset = pickle.load(f)
-# Define the graph encoder
-class Encoder(nn.Module):
-    def __init__(self, in_channels, hidden_channels):
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class Encoder(torch.nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels):
         super(Encoder, self).__init__()
         self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, out_channels)
 
     def forward(self, x, edge_index):
         x = F.relu(self.conv1(x, edge_index))
         x = self.conv2(x, edge_index)
         return x
 
-# Define the GAE model
-class GAEModel(nn.Module):
-    def __init__(self, num_features, hidden_channels):
-        super(GAEModel, self).__init__()
-        self.encoder = Encoder(num_features, hidden_channels)
-        self.gae = GAE(self.encoder)
+class Decoder(torch.nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Decoder, self).__init__()
+        self.lin = torch.nn.Linear(in_channels, out_channels)
 
-    def forward(self, data):
-        x, edge_index = data.x, data.edge_index
-        z = self.gae(x, edge_index)
+    def forward(self, z):
+        z = self.lin(z)
         return z
 
-# Train the GAE model
-model = GAEModel(num_features=dataset.num_features, hidden_channels=16)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-criterion = nn.MSELoss()
+class GAE(torch.nn.Module):
+    def __init__(self, encoder, decoder):
+        super(GAE, self).__init__()
+        self.encoder = encoder
+        self.decoder = decoder
 
-def train():
-    model.train()
+    def reset_parameters(self):
+        self.encoder.reset_parameters()
+        self.decoder.reset_parameters()
+
+    def forward(self, x, edge_index):
+        z = self.encoder(x, edge_index)
+        z = F.relu(z)
+        x_hat = self.decoder(z)
+        return x_hat
+
+# Load data
+data = pickle.load(open('./data/dataset.pkl', 'rb'))
+gnn = GAE(Encoder(data.num_features, 16, 8), Decoder(8, data.num_features))
+gnn = gnn.to(device)
+
+# Train loop
+optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
+criterion = torch.nn.MSELoss()
+for epoch in range(100):
+    gnn.train()
     optimizer.zero_grad()
-    z = model(data)
-    loss = criterion(z, data.x)
+    x_hat = gnn(data.x, data.edge_index)
+    loss = criterion(x_hat, data.x)
     loss.backward()
     optimizer.step()
-    return loss.item()
+    print(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
 
-for epoch in range(100):
-    loss = train()
-    print('Epoch {:03d}, Loss: {:.4f}'.format(epoch, loss))
+# Evaluate the trained model
+gnn.eval()
+data.x = data.x.to(device)
+data.edge_index = data.edge_index.to(device)
+with torch.no_grad():
+    x_hat = gnn(data.x, data.edge_index)
+    print("Reconstructed data: ")
+    print(x_hat)
