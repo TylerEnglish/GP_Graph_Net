@@ -14,9 +14,7 @@ def welcome_page():
     st.write("# GNNs for Drug Discovery: Analyzing Zinc Database")
     st.write("Today, we'll be discussing how a Graph Neural Network, or GNN, can be used to analyze the Zinc database and identify potential drug candidates. The Zinc database is a large collection of purchasable compounds that can be used for drug discovery. However, identifying potential drug candidates from this database is a challenging task, as the compounds are represented as nodes in a graph with various relationships, such as similarity or chemical properties, represented as edges in the graph.")
     st.write("## What we are trying to solve")
-    st.write("Quantum chemistry is a field of study that seeks to explain and predict the behavior of molecules and atoms using quantum mechanics. This app will help you learn about the basics of quantum mechanics and how it applies to chemistry.")
-    st.write("## Application in the real world")
-    st.write("Quantum chemistry has many applications in the real world. For example, it can be used to predict the behavior of chemical reactions, design new drugs, and develop new materials with specific properties.")
+    st.write("Our objective is to use a Graph Neural Network (GNN) to analyze the Zinc database and identify potential drug candidates. The Zinc database is a large collection of purchasable compounds that can be used for drug discovery, but traditional methods of identifying potential drug candidates from this database are limited. By leveraging the graph structure of the database and using a GNN, we aim to overcome these limitations and discover new drugs that could save lives.")
 
 
 welcome_page()
