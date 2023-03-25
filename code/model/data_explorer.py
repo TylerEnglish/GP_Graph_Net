@@ -29,8 +29,6 @@ print("Number of edges:", data.num_edges)
 print("Node features shape:", data.x.shape)
 print("Edge features shape:", data.edge_attr.shape)
 print("Target value:", data.y)
-print(data)
-print(data.features)
 
 # Demonstrate how to access specific nodes and edges in the graph
 print(data.x[:1].shape) # Access the first node's features
@@ -58,7 +56,7 @@ for i in range(n):
 
 # Read a CSV file using Pandas
 try:
-    PATH = './data/QM9/raw/gdb9.sdf.csv'
+    PATH = './data/ZINC/raw/zinc_standard_agent/properties.csv'
     df = pd.read_csv(PATH)
     print(df.info())
 except FileNotFoundError:

@@ -1,8 +1,10 @@
 import pickle
-from torch_geometric.datasets import QM9
 from torch_geometric.data import DataLoader
+import torch
+from torch_geometric.datasets import ZINC
+
 # Load the dataset
-dataset = QM9(root='data/QM9')
+dataset = ZINC(root='data/ZINC')
 
 # Save the dataset as a file
 with open('./data/dataset.pkl', 'wb') as f:
