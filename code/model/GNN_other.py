@@ -7,6 +7,8 @@ from torch_geometric.loader import DataLoader
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 import matplotlib.pyplot as plt
+import torch.optim as optim
+from torch.optim.lr_scheduler import StepLR
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -49,6 +51,7 @@ data = pickle.load(open('./data/dataset.pkl', 'rb'))
 print(data)
 # get subset of data
 data = data[:10000]
+print(len(data))
 
 # Split the data into training and testing sets
 train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
@@ -56,15 +59,20 @@ train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
 # Further split the training set into training and validation sets
 train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=42)
 
+print("Number of training examples:", len(train_data))
+print(train_data)
+print("Number of validation examples:", len(val_data))
+print("Number of test examples:", len(test_data))
+
 batch_size = 1
 
 # Create data loaders
-train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=batch_size)
-test_loader = DataLoader(test_data, batch_size=batch_size)
+# train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+# val_loader = DataLoader(val_data, batch_size=batch_size)
+# test_loader = DataLoader(test_data, batch_size=batch_size)
 
 # Define the model
-gnn = myGCNConv(data.num_features, 16, data.num_classes)
+gnn = myGCNConv(data.num_features, 16, 1)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 gnn = gnn.to(device)
 
@@ -72,35 +80,45 @@ gnn = gnn.to(device)
 # criterion = torch.nn.CrossEntropyLoss()
 
 # Define the optimizer
-optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
+# optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
 
 # Set the model to training mode
 gnn.train()
 
 # Define the number of training epochs
-num_epochs = 10
+num_epochs = 100
 
 gnn = gnn.to(device)
 
 train_losses, val_losses = [], []
 
 # Train loop with validation
-optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
-criterion = torch.nn.MSELoss()
+optimizer = torch.optim.Adam(gnn.parameters(), lr=.5)
+
+# optimizer = optim.SGD(gnn.parameters(), lr=.5)
+scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
+
+# criterion = torch.nn.MSELoss()
+criterion = torch.nn.MSELoss(reduction='mean')
+# criterion = torch.nn.MSELoss(size_average=batch_size, reduce=True, reduction="mean")
 best_val_loss = float('inf')
 
 for epoch in range(num_epochs):
     gnn.train()
     train_loss = 0
-    for batch in train_loader:
+    for graph in train_data:
+        # print(batch)
         optimizer.zero_grad()
-        x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
-        # print(x_hat[0])
-        # print(batch.y.to(device))
-        loss = criterion(x_hat[0], batch.y.to(device))
+        x_hat = gnn(graph.x.float().to(device), graph.edge_index.to(device))
+        # print("x_hat shape:", x_hat.shape)
+        # print("batch.y shape:", batch.y.float().to(device).shape)
+        
+
+        loss = criterion(x_hat[0], graph.y.to(device))
+
         loss.backward()
         optimizer.step()
-        train_loss += loss.item() * batch.num_graphs
+        train_loss += loss.item() #* batch.num_graphs
         # print("=", end="")
     
     train_loss /= len(train_data)
@@ -108,11 +126,12 @@ for epoch in range(num_epochs):
     
     gnn.eval()
     val_loss = 0
-    for batch in val_loader:
+    for graph in val_data:
         with torch.no_grad():
-            x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
-            loss = criterion(x_hat, batch.y.to(device))
-            val_loss += loss.item() * batch.num_graphs
+            x_hat = gnn(graph.x.float().to(device), graph.edge_index.to(device))
+            loss = criterion(x_hat[0], graph.y.to(device))
+
+            val_loss += loss.item() #* batch.num_graphs
             # print(">", end="")
     
     val_loss /= len(val_data)
@@ -124,15 +143,17 @@ for epoch in range(num_epochs):
     train_losses.append(train_loss)
     val_losses.append(val_loss)
     print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+    scheduler.step()
 
 gnn.load_state_dict(torch.load('./data/gcn_model.pt'))
 gnn.eval()
 test_loss = 0
-for batch in test_loader:
+for graph in test_data:
     with torch.no_grad():
-        x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.y.to(device))
-        test_loss += loss.item() * batch.num_graphs
+        x_hat = gnn(graph.x.float().to(device), graph.edge_index.to(device))
+        loss = criterion(x_hat[0], graph.y.to(device))
+
+        test_loss += loss.item() #* batch.num_graphs
         
 test_loss /= len(test_data)
 
