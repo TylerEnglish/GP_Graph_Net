@@ -6,18 +6,42 @@ from torch_geometric.nn import GCNConv, GAE
 from torch_geometric.loader import DataLoader
 from torch_geometric.utils import add_self_loops, degree
 import matplotlib.pyplot as plt
+import networkx as nx
+from torch_geometric.utils import to_networkx
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class myGAE(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
-        super(myGAE, self).__init__()
+class myEncoder(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(myEncoder, self).__init__()
         self.conv1 = GCNConv(input_dim, hidden_dim)
-        self.conv2 = GCNConv(hidden_dim, output_dim)
+        self.conv2 = GCNConv(hidden_dim, hidden_dim)
 
     def forward(self, x, edge_index):
         x = F.relu(self.conv1(x, edge_index))
         x = self.conv2(x, edge_index)
+        return x
+
+class myDecoder(torch.nn.Module):
+    def __init__(self, hidden_dim, output_dim):
+        super(myDecoder, self).__init__()
+        self.linear1 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = torch.nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
+
+class myGAE(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(myGAE, self).__init__()
+        self.encoder = myEncoder(input_dim, hidden_dim)
+        self.decoder = myDecoder(hidden_dim, output_dim)
+
+    def forward(self, x, edge_index):
+        x = self.encoder(x, edge_index)
+        x = self.decoder(x)
         return x
 
 
@@ -96,3 +120,64 @@ for epoch in range(num_epochs):
     train_losses.append(train_loss)
     val_losses.append(val_loss)
     print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+# Plot the training and validation losses
+plt.plot(train_losses, label='Train')
+plt.plot(val_losses, label='Val')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+
+
+
+
+gae = myGAE(data.num_features, 16, data.num_features)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+gae = gae.to(device)
+
+# Load the saved model
+gae.load_state_dict(torch.load('./data/gae_model.pt'))
+
+
+# Convert a PyTorch Geometric graph to a NetworkX graph
+G = to_networkx(batch, to_undirected=True)
+
+# Plot the input graph
+plt.figure(figsize=(20, 8))
+pos = nx.spring_layout(G, seed=42)
+nx.draw(G, pos, node_size=50, with_labels=True)
+plt.title('Input Graph')
+plt.show()
+
+# Evaluate the trained model on the test set
+gae.eval()
+outputs = []
+for batch in test_loader:
+    with torch.no_grad():
+        output = gae(batch.x.float().to(device), batch.edge_index.to(device))
+        output = output.cpu().numpy().tolist()
+        outputs += output
+
+# Convert the output to a list of edges
+edges = []
+for output in outputs:
+    edges.append([(i, j) for i, j in enumerate(output) if j > 0.5])
+
+# Create a new NetworkX graph object
+output_graph = nx.Graph()
+
+# Add nodes to the graph
+output_graph.add_nodes_from(range(data.num_features))
+
+# Add edges to the graph
+for e in edges:
+    output_graph.add_edges_from(e)
+
+# Plot the output graph
+plt.figure(figsize=(8, 8))
+pos = nx.spring_layout(output_graph, seed=42)
+nx.draw(output_graph, pos, node_size=50, with_labels=True)
+plt.title('Output Graph')
+plt.show()
