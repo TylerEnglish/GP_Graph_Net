@@ -1,0 +1,3 @@
+Start off predicting 'Mu'
+
+Then predict 'Mu', 'homo', 'lumo', 'gap'
