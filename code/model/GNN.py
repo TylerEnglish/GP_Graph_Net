@@ -11,16 +11,24 @@ import matplotlib.pyplot as plt
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class myGCNConv(MessagePassing):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, hidden_channels, out_channels):
         super(myGCNConv, self).__init__(aggr='add')
-        self.lin = torch.nn.Linear(in_channels, out_channels)
+        # self.lin = torch.nn.Linear(in_channels, out_channels)
+        # self.add_module('lin', self.lin)
+        self.add_module('conv', GCNConv(in_channels, hidden_channels))
+        self.add_module('lin2', torch.nn.Linear(hidden_channels, hidden_channels))
+        self.add_module('relu', torch.nn.ReLU())
+        self.add_module('conv2', GCNConv(hidden_channels, out_channels))
 
     def forward(self, x, edge_index):
         # Step 1: Add self-loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # Step 2: Multiply with weights
-        x = self.lin(x)
+        # x = self.lin(x)
+        x = self.conv(x, edge_index) # GCNConv
+        x = self.relu(x) # ReLU
+        x = self.conv2(x, edge_index) # GCNConv
 
         # Step 3: Calculate the normalization
         row, col = edge_index
@@ -61,7 +69,7 @@ val_loader = DataLoader(val_data, batch_size=batch_size)
 test_loader = DataLoader(test_data, batch_size=batch_size)
 
 # Define the model
-gnn = myGCNConv(data.num_features, data.num_classes)
+gnn = myGCNConv(data.num_features, 16, data.num_classes)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 gnn = gnn.to(device)
 
@@ -75,7 +83,7 @@ optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
 gnn.train()
 
 # Define the number of training epochs
-num_epochs = 5
+num_epochs = 100
 
 gnn = gnn.to(device)
 
