@@ -18,7 +18,7 @@ class myGCNConv(MessagePassing):
 
     def forward(self, x, edge_index):
         # Step 1: Add self-loops
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+        # edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         
         x = F.relu(self.conv1(x, edge_index))
         x = self.conv2(x, edge_index)
@@ -37,7 +37,7 @@ class myGCNConv(MessagePassing):
 
         # Step 6: Apply classifier
         # x = self.classifier(x)
-        return x[0]
+        return x
 
 
     def message(self, x_j, norm):
@@ -47,14 +47,16 @@ class myGCNConv(MessagePassing):
 
 data = pickle.load(open('./data/dataset.pkl', 'rb'))
 print(data)
+# get subset of data
+data = data[:10000]
 
 # Split the data into training and testing sets
-train_data, test_data = train_test_split(data, test_size=0.2, random_state=123)
+train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
 
 # Further split the training set into training and validation sets
-train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=123)
+train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=42)
 
-batch_size = 32
+batch_size = 1
 
 # Create data loaders
 train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
@@ -76,7 +78,7 @@ optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
 gnn.train()
 
 # Define the number of training epochs
-num_epochs = 100
+num_epochs = 10
 
 gnn = gnn.to(device)
 
@@ -92,8 +94,10 @@ for epoch in range(num_epochs):
     train_loss = 0
     for batch in train_loader:
         optimizer.zero_grad()
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.y[0].to(device))
+        x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
+        # print(x_hat[0])
+        # print(batch.y.to(device))
+        loss = criterion(x_hat[0], batch.y.to(device))
         loss.backward()
         optimizer.step()
         train_loss += loss.item() * batch.num_graphs
@@ -106,8 +110,8 @@ for epoch in range(num_epochs):
     val_loss = 0
     for batch in val_loader:
         with torch.no_grad():
-            x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-            loss = criterion(x_hat, batch.y[0].to(device))
+            x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
+            loss = criterion(x_hat, batch.y.to(device))
             val_loss += loss.item() * batch.num_graphs
             # print(">", end="")
     
@@ -126,8 +130,8 @@ gnn.eval()
 test_loss = 0
 for batch in test_loader:
     with torch.no_grad():
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.y[0].to(device))
+        x_hat = gnn(batch.x.float().to(device), batch.edge_index.to(device))
+        loss = criterion(x_hat, batch.y.to(device))
         test_loss += loss.item() * batch.num_graphs
         
 test_loss /= len(test_data)
@@ -145,8 +149,8 @@ plt.savefig('./data/gcnloss.png')
 
 data = data[0]
 
-data.x = data.x.to(device)
-data.edge_index = data.edge_index.to(device)
+data.x = data.x.float().to(device)
+data.edge_index = data.edge_index.long().to(device)
 
 print("x: \n", data.x)
 print("edge_index: \n", data.edge_index)
