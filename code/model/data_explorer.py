@@ -29,8 +29,6 @@ print("Number of edges:", data.num_edges)
 print("Node features shape:", data.x.shape)
 print("Edge features shape:", data.edge_attr.shape)
 print("Target value:", data.y)
-print(data)
-print(data.features)
 
 # Demonstrate how to access specific nodes and edges in the graph
 print(data.x[:1].shape) # Access the first node's features
@@ -50,15 +48,20 @@ print(type(networkx_graph))
 
 # Visualize multiple graphs
 n = 10
+fig = plt.figure(figsize=(20, 15))
 for i in range(n):
+    plt.subplot(2, 5, i+1)
     data = dataset[i]
     networkx_graph = to_networkx(data)
     nx.draw_networkx(networkx_graph)
-    plt.show()
+
+plt.savefig(f'./data/pics/data_charts.png')
+
+
 
 # Read a CSV file using Pandas
 try:
-    PATH = './data/QM9/raw/gdb9.sdf.csv'
+    PATH = './data/ZINC/raw/zinc_standard_agent/properties.csv'
     df = pd.read_csv(PATH)
     print(df.info())
 except FileNotFoundError:

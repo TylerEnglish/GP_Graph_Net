@@ -2,12 +2,15 @@ import pickle
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.data import DataLoader
+from torch_geometric.data import DataLoader, Data
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import networkx as nx
+from torch_geometric.utils import to_networkx
+from torch_geometric.datasets import ZINC
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -18,6 +21,7 @@ class Encoder(torch.nn.Module):
         self.conv2 = GCNConv(hidden_channels, out_channels)
 
     def forward(self, x, edge_index):
+        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
         x = F.relu(self.conv1(x, edge_index))
         x = self.conv2(x, edge_index)
         return x
@@ -48,108 +52,139 @@ class GAE(torch.nn.Module):
         return x_hat
 
 # Load data
-data = pickle.load(open('./data/dataset.pkl', 'rb'))
+# Load the dataset from file using pickle
+try:
+    with open('./data/dataset.pkl', 'rb') as f:
+        data = pickle.load(f)
+except FileNotFoundError:
+    print("Error: dataset file not found.")
+    exit(1)
+except Exception as e:
+    print("Error loading dataset:", e)
+    exit(1)
 
-# Split the data into training and testing sets
-train_data, test_data = train_test_split(data, test_size=0.2, random_state=123)
 
-# Further split the training set into training and validation sets
-train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=123)
 
-# Create data loaders
-train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=64)
-test_loader = DataLoader(test_data, batch_size=64)
+x = torch.tensor(data.x, dtype=torch.float)
+edge_index = torch.tensor(data.edge_index, dtype=torch.long)
+y = torch.tensor(data.y, dtype=torch.float)
 
-num_features = max([dataset.num_features for dataset in train_data])
-gnn = GAE(Encoder(num_features, 16, 8), Decoder(8, num_features))
-gnn = gnn.to(device)
+train_mask, test_mask = train_test_split(
+    range(data.num_nodes), test_size=0.2, random_state=123)
+data.train_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+data.test_mask = torch.zeros(data.num_nodes, dtype=torch.bool)
+data.train_mask[train_mask] = True
+data.test_mask[test_mask] = True
+
+model = GAE(
+    Encoder(in_channels=1, hidden_channels=16, out_channels=1).to(device),
+    Decoder(in_channels=1, out_channels=1).to(device)
+).to(device)
 
 # Train loop with validation
-optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
 criterion = torch.nn.MSELoss()
-best_val_loss = float('inf')
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
 train_losses, val_losses = [], []
 
 for epoch in range(5):
-    gnn.train()
-    train_loss = 0
-    for batch in train_loader:
-        optimizer.zero_grad()
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.x.to(device))
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item() * batch.num_graphs
-    
-    train_loss /= len(train_data)
-    
-    gnn.eval()
-    val_loss = 0
-    for batch in val_loader:
-        with torch.no_grad():
-            x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-            loss = criterion(x_hat, batch.x.to(device))
-            val_loss += loss.item() * batch.num_graphs
-    
-    val_loss /= len(val_data)
+    model.train()
+    optimizer.zero_grad()
+    out = model(x, edge_index)
+    loss = criterion(out[data.train_mask], y[data.train_mask])
+    loss.backward()
+    optimizer.step()
 
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        torch.save(gnn.state_dict(), './data/gnn_model.pt')
-
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
-
-    print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
-
-gnn.load_state_dict(torch.load('./data/gnn_model.pt'))
-gnn.eval()
-test_loss = 0
-for batch in test_loader:
+    # Evaluate the model
+    model.eval()
     with torch.no_grad():
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.x.to(device))
-        test_loss += loss.item() * batch.num_graphs
-        
-test_loss /= len(test_data)
+        out = model(x, edge_index)
+        train_loss = criterion(out[data.train_mask], y[data.train_mask])
+        test_loss = criterion(out[data.test_mask], y[data.test_mask])
+        train_losses.append(train_loss.item())
+        val_losses.append(test_loss.item())
+        print(f"Epoch: {epoch}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}")
 
-print(f"Test Loss: {test_loss:.4f}")
-
-
-plt.plot(train_losses, label='Training Loss')
+plt.plot(train_losses, label="Training Loss")
 plt.plot(val_losses, label='Validation Loss')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
-plt.savefig('./data/gae_loss.png')
-
 
 # Print out test input, Wanna explore test_loader data
-# with torch.no_grad():
-#     batch = next(iter(test_loader))
-#     x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+# i = 0
+# graphs = []
+# single_input = []
+# for batch in test_loader:
+#     if i < 10:
+#         networkx_graph = to_networkx(batch)
+#         print(type(networkx_graph))
+#         graphs.append(networkx_graph)
 
-# G1 = nx.Graph()
-# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
-#     G1.add_edge(u.item(), v.item(), weight=batch.x[i].item())
+#         single_input.append(batch)
+#         print(batch)
+#     i+=1
 
-# G2 = nx.Graph()
-# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
-#     G2.add_edge(u.item(), v.item(), weight=x_hat[i].item())
+# # display input
+# import os
+# if not os.path.exists('./data/pics'):
+#     os.makedirs('./data/pics')
 
-# pos = nx.spring_layout(G1, seed=42)
+# plt.figure(figsize=(15, 5))
+# for i in range(len(single_input)):
+#     plt.subplot(2, 5, i+1)
+#     nx.draw(graphs[i])
 
-# # Plot input graph
-# fig, ax = plt.subplots(figsize=(10, 10))
-# nx.draw_networkx(G1, pos, node_color=batch.x.tolist(), with_labels=False, ax=ax)
-# ax.set_title('Input Graph')
+# plt.savefig(f'./data/pics/input_charts.png')
 
-# # Plot output graph
-# fig, ax = plt.subplots(figsize=(10, 10))
-# nx.draw_networkx(G2, pos, node_color=x_hat.tolist(), with_labels=False, ax=ax)
-# ax.set_title('Output Graph')
+# data =  Data(x=single_input[0].x, edge_index=single_input[0].edge_index)
+# print("\nSample data point:")
+# print("Number of nodes:", data.num_nodes)
+# print("Node features shape:", data.x.shape)
+# print("Edge features shape:", data.edge_index.shape)
+# print("Edges:", data.edge_index)
+# print(data)
 
-# plt.savefig('./data/gaecompare_chart.png')
-# plt.show()
+
+# # feed in each data point through model and output it
+# # gnn.eval()
+# # i = 0
+# # o_graphs = []
+# # single_output = []
+# # for batch in test_loader:
+# #     if i < 10:
+# #         with torch.no_grad():
+# #             x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+# #             # output the predicted values
+# #             print("Input:", batch.x)
+# #             print("Output:", x_hat)
+
+
+# # Feed in each data point through model and output it
+# gnn.eval()
+# i = 0
+# o_graphs = []
+# single_output = []
+
+# for batch in test_loader:
+#     if i < 10:
+#         with torch.no_grad():
+#             x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+#             # Output the predicted values
+#             print("Input:", batch.x)
+#             print("Output:", x_hat)
+            
+#             # Store input and output values
+#             single_output.append(x_hat.cpu())
+            
+#             # Convert output tensor to networkx graph
+#             output_graph = to_networkx(Data(x=x_hat.cpu(), edge_index=batch.edge_index.cpu()))
+#             o_graphs.append(output_graph)
+#     i += 1
+
+
+# for i in range(len(single_output)):
+#     plt.subplot(2, 5, i+1)
+#     nx.draw(o_graphs[i])
+
+# plt.savefig(f'./data/pics/_charts.png')
