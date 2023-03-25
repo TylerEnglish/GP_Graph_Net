@@ -1,27 +1,26 @@
 import pickle
-from sklearn.model_selection import train_test_split
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.loader import DataLoader
+from torch_geometric.data import DataLoader
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class myGCNConv(MessagePassing):
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        super(myGCNConv, self).__init__(aggr='add')
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+class GCNConv(MessagePassing):
+    def __init__(self, in_channels, out_channels):
+        super(GCNConv, self).__init__(aggr='add')
+        self.lin = torch.nn.Linear(in_channels, out_channels)
 
     def forward(self, x, edge_index):
         # Step 1: Add self-loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        
-        x = F.relu(self.conv1(x, edge_index))
-        x = self.conv2(x, edge_index)
+
+        # Step 2: Multiply with weights
+        x = self.lin(x)
 
         # Step 3: Calculate the normalization
         row, col = edge_index
@@ -37,7 +36,7 @@ class myGCNConv(MessagePassing):
 
         # Step 6: Apply classifier
         # x = self.classifier(x)
-        return x[0]
+        return x
 
 
     def message(self, x_j, norm):
@@ -46,109 +45,67 @@ class myGCNConv(MessagePassing):
 
 
 data = pickle.load(open('./data/dataset.pkl', 'rb'))
-print(data)
 
-# Split the data into training and testing sets
-train_data, test_data = train_test_split(data, test_size=0.2, random_state=123)
-
-# Further split the training set into training and validation sets
-train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=123)
-
-batch_size = 32
+# Split data into training and validation sets
+train_data, val_data = train_test_split(data, test_size=0.2)
 
 # Create data loaders
-train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
-val_loader = DataLoader(val_data, batch_size=batch_size)
-test_loader = DataLoader(test_data, batch_size=batch_size)
+train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=64, shuffle=False)
 
-# Define the model
-gnn = myGCNConv(data.num_features, 16, data.num_classes)
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+gnn = GCNConv(data.num_features, data.num_classes)
 gnn = gnn.to(device)
 
-# Define the loss function
-# criterion = torch.nn.CrossEntropyLoss()
-
-# Define the optimizer
 optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
 
-# Set the model to training mode
-gnn.train()
+# Train the model
+train_loss_history = []
+val_loss_history = []
 
-# Define the number of training epochs
-num_epochs = 100
 
-gnn = gnn.to(device)
-
-train_losses, val_losses = [], []
-
-# Train loop with validation
-optimizer = torch.optim.Adam(gnn.parameters(), lr=0.01)
-criterion = torch.nn.MSELoss()
-best_val_loss = float('inf')
+num_epochs = 10
 
 for epoch in range(num_epochs):
-    gnn.train()
+    # Training
     train_loss = 0
-    for batch in train_loader:
+    gnn.train()
+
+    for data in train_loader:
+        data = data.to(device)
         optimizer.zero_grad()
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.y[0].to(device))
+        out = gnn(data.x, data.edge_index)
+        loss = F.cross_entropy(out, data.y)
         loss.backward()
         optimizer.step()
-        train_loss += loss.item() * batch.num_graphs
-        # print("=", end="")
-    
-    train_loss /= len(train_data)
-    print("")
-    
-    gnn.eval()
+        train_loss += loss.item()
+
+    train_loss /= len(train_loader)
+    train_loss_history.append(train_loss)
+
+    # Validation
     val_loss = 0
-    for batch in val_loader:
+    gnn.eval()
+
+    for data in val_loader:
+        data = data.to(device)
         with torch.no_grad():
-            x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-            loss = criterion(x_hat, batch.y[0].to(device))
-            val_loss += loss.item() * batch.num_graphs
-            # print(">", end="")
-    
-    val_loss /= len(val_data)
+            out = gnn(data.x, data.edge_index)
+            loss = F.cross_entropy(out, data.y)
+            val_loss += loss.item()
 
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        torch.save(gnn.state_dict(), './data/gcn_model.pt')
+    val_loss /= len(val_loader)
+    val_loss_history.append(val_loss)
 
-    train_losses.append(train_loss)
-    val_losses.append(val_loss)
-    print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+    print(f'Epoch: {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
 
-gnn.load_state_dict(torch.load('./data/gcn_model.pt'))
-gnn.eval()
-test_loss = 0
-for batch in test_loader:
-    with torch.no_grad():
-        x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-        loss = criterion(x_hat, batch.y[0].to(device))
-        test_loss += loss.item() * batch.num_graphs
-        
-test_loss /= len(test_data)
 
-print(f"Test Loss: {test_loss:.4f}")
 
-plt.plot(train_losses, label='Training loss')
-plt.plot(val_losses, label='Validation loss')
-plt.title('Training and Validation Loss')
+
+plt.plot(train_loss_history, label='Training Loss')
+plt.plot(val_loss_history, label='Validation Loss')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
-plt.legend(frameon=False)
-plt.show()
-plt.savefig('./data/gcnloss.png')
+plt.legend()
 
-data = data[0]
-
-data.x = data.x.to(device)
-data.edge_index = data.edge_index.to(device)
-
-print("x: \n", data.x)
-print("edge_index: \n", data.edge_index)
-print("Output: ")
-print(gnn.forward(data.x, data.edge_index))
+# Save the chart
+plt.savefig('loss_chart.png')
