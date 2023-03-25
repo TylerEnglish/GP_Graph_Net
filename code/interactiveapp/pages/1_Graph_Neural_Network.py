@@ -8,10 +8,7 @@ import os
 # Page 2: What is a Graph Neural Network
 
 
-
-
 def graph_neural_network():
-    st.image
     st.write("# What is a Graph Neural Network")
     st.write("A graph neural network (GNN) is a type of neural network designed to work with data represented in the form of a graph. In a graph, data is represented as a set of interconnected nodes, where each node represents an entity and edges represent relationships between entities.")
     st.write("GNNs operate by propagating information through the graph structure using a set of learnable functions. Each node in the graph is associated with a feature vector, which represents the characteristics of the corresponding entity. The GNN processes the node features and the edge connections to compute a new set of node features that incorporate information from the neighboring nodes in the graph.")
