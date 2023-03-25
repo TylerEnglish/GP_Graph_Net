@@ -18,6 +18,7 @@ except Exception as e:
 # Print basic information about the dataset
 print("Number of samples:", len(dataset))
 print("Number of features:", dataset.num_features)
+print(dataset[0])
 print("Number of classes:", dataset.num_classes)
 
 # Sample a data point and print information about it
@@ -51,7 +52,7 @@ n = 10
 for i in range(n):
     data = dataset[i]
     networkx_graph = to_networkx(data)
-    nx.draw(networkx_graph)
+    nx.draw_networkx(networkx_graph)
     plt.show()
 
 # Read a CSV file using Pandas
