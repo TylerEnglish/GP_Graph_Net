@@ -112,79 +112,79 @@ plt.ylabel('Loss')
 plt.legend()
 
 # Print out test input, Wanna explore test_loader data
-# i = 0
-# graphs = []
-# single_input = []
-# for batch in test_loader:
-#     if i < 10:
-#         networkx_graph = to_networkx(batch)
-#         print(type(networkx_graph))
-#         graphs.append(networkx_graph)
+i = 0
+graphs = []
+single_input = []
+for batch in test_loader:
+    if i < 10:
+        networkx_graph = to_networkx(batch)
+        print(type(networkx_graph))
+        graphs.append(networkx_graph)
 
-#         single_input.append(batch)
-#         print(batch)
-#     i+=1
+        single_input.append(batch)
+        print(batch)
+    i+=1
 
-# # display input
-# import os
-# if not os.path.exists('./data/pics'):
-#     os.makedirs('./data/pics')
+# display input
+import os
+if not os.path.exists('./data/pics'):
+    os.makedirs('./data/pics')
 
-# plt.figure(figsize=(15, 5))
-# for i in range(len(single_input)):
-#     plt.subplot(2, 5, i+1)
-#     nx.draw(graphs[i])
+plt.figure(figsize=(15, 5))
+for i in range(len(single_input)):
+    plt.subplot(2, 5, i+1)
+    nx.draw(graphs[i])
 
-# plt.savefig(f'./data/pics/input_charts.png')
+plt.savefig(f'./data/pics/input_charts.png')
 
-# data =  Data(x=single_input[0].x, edge_index=single_input[0].edge_index)
-# print("\nSample data point:")
-# print("Number of nodes:", data.num_nodes)
-# print("Node features shape:", data.x.shape)
-# print("Edge features shape:", data.edge_index.shape)
-# print("Edges:", data.edge_index)
-# print(data)
-
-
-# # feed in each data point through model and output it
-# # gnn.eval()
-# # i = 0
-# # o_graphs = []
-# # single_output = []
-# # for batch in test_loader:
-# #     if i < 10:
-# #         with torch.no_grad():
-# #             x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-# #             # output the predicted values
-# #             print("Input:", batch.x)
-# #             print("Output:", x_hat)
+data =  Data(x=single_input[0].x, edge_index=single_input[0].edge_index)
+print("\nSample data point:")
+print("Number of nodes:", data.num_nodes)
+print("Node features shape:", data.x.shape)
+print("Edge features shape:", data.edge_index.shape)
+print("Edges:", data.edge_index)
+print(data)
 
 
-# # Feed in each data point through model and output it
+# feed in each data point through model and output it
 # gnn.eval()
 # i = 0
 # o_graphs = []
 # single_output = []
-
 # for batch in test_loader:
 #     if i < 10:
 #         with torch.no_grad():
 #             x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
-#             # Output the predicted values
+#             # output the predicted values
 #             print("Input:", batch.x)
 #             print("Output:", x_hat)
+
+
+# Feed in each data point through model and output it
+gnn.eval()
+i = 0
+o_graphs = []
+single_output = []
+
+for batch in test_loader:
+    if i < 10:
+        with torch.no_grad():
+            x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
+            # Output the predicted values
+            print("Input:", batch.x)
+            print("Output:", x_hat)
             
-#             # Store input and output values
-#             single_output.append(x_hat.cpu())
+            # Store input and output values
+            single_output.append(x_hat.cpu())
             
-#             # Convert output tensor to networkx graph
-#             output_graph = to_networkx(Data(x=x_hat.cpu(), edge_index=batch.edge_index.cpu()))
-#             o_graphs.append(output_graph)
-#     i += 1
+            # Convert output tensor to networkx graph
+            output_graph = to_networkx(Data(x=x_hat.cpu(), edge_index=batch.edge_index.cpu()))
+            o_graphs.append(output_graph)
+    i += 1
 
 
-# for i in range(len(single_output)):
-#     plt.subplot(2, 5, i+1)
-#     nx.draw(o_graphs[i])
+for i in range(len(single_output)):
+    plt.subplot(2, 5, i+1)
+    nx.draw(o_graphs[i])
 
-# plt.savefig(f'./data/pics/_charts.png')
+plt.savefig(f'./data/pics/_charts.png')
