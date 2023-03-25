@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import os
+from PIL import Image
 # from visual_displays.welcome import welcome_page
 # from visual_displays.gnn import graph_neural_network
 # from visual_displays.code import code_and_validation
@@ -8,7 +9,7 @@ import os
 
 # Sidebar Section
 # st.sidebar.title("Zinc Molecular Weight")
-
+image = Image.open('./floating-graph-nodes.png')
 
 def welcome_page():
     st.write("# Graph Neural Networks for Drug Discovery")
