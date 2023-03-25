@@ -7,6 +7,7 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import networkx as nx
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -71,7 +72,7 @@ best_val_loss = float('inf')
 
 train_losses, val_losses = [], []
 
-for epoch in range(100):
+for epoch in range(5):
     gnn.train()
     train_loss = 0
     for batch in train_loader:
@@ -125,10 +126,30 @@ plt.legend()
 plt.savefig('./data/gae_loss.png')
 
 
-# Save test data
-with open('./data/test_data.pkl', 'wb') as f:
-    pickle.dump(test_data, f)
+# Print out test input, Wanna explore test_loader data
+# with torch.no_grad():
+#     batch = next(iter(test_loader))
+#     x_hat = gnn(batch.x.to(device), batch.edge_index.to(device))
 
-# Save test data
-with open('./data/train.pkl', 'wb') as f:
-    pickle.dump(train_data, f)
+# G1 = nx.Graph()
+# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
+#     G1.add_edge(u.item(), v.item(), weight=batch.x[i].item())
+
+# G2 = nx.Graph()
+# for i, (u, v) in enumerate(batch.edge_index.T.tolist()):
+#     G2.add_edge(u.item(), v.item(), weight=x_hat[i].item())
+
+# pos = nx.spring_layout(G1, seed=42)
+
+# # Plot input graph
+# fig, ax = plt.subplots(figsize=(10, 10))
+# nx.draw_networkx(G1, pos, node_color=batch.x.tolist(), with_labels=False, ax=ax)
+# ax.set_title('Input Graph')
+
+# # Plot output graph
+# fig, ax = plt.subplots(figsize=(10, 10))
+# nx.draw_networkx(G2, pos, node_color=x_hat.tolist(), with_labels=False, ax=ax)
+# ax.set_title('Output Graph')
+
+# plt.savefig('./data/gaecompare_chart.png')
+# plt.show()

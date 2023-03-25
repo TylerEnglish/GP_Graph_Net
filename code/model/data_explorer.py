@@ -48,13 +48,13 @@ print(type(data))
 networkx_graph = to_networkx(data)
 print(type(networkx_graph))
 
-# # Visualize multiple graphs
-# n = 10
-# for i in range(n):
-#     data = dataset[i]
-#     networkx_graph = to_networkx(data)
-#     nx.draw_networkx(networkx_graph)
-#     plt.show()
+# Visualize multiple graphs
+n = 10
+for i in range(n):
+    data = dataset[i]
+    networkx_graph = to_networkx(data)
+    nx.draw_networkx(networkx_graph)
+    plt.show()
 
 # Read a CSV file using Pandas
 try:
