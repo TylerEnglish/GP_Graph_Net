@@ -1,139 +1,183 @@
 import pickle
+from sklearn.model_selection import train_test_split
 import torch
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv
-from torch_geometric.data import DataLoader, Data
-from torch_geometric.nn import MessagePassing
+from torch_geometric.nn import GCNConv, GAE
+from torch_geometric.loader import DataLoader
 from torch_geometric.utils import add_self_loops, degree
-from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import networkx as nx
 from torch_geometric.utils import to_networkx
-from torch_geometric.datasets import ZINC
-
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class Encoder(torch.nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels):
-        super(Encoder, self).__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, out_channels)
+class myEncoder(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim):
+        super(myEncoder, self).__init__()
+        self.conv1 = GCNConv(input_dim, hidden_dim)
+        self.conv2 = GCNConv(hidden_dim, hidden_dim)
 
     def forward(self, x, edge_index):
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
-        x = x.to(torch.float)  # Cast tensor to Float
-        edge_index = edge_index.to(torch.float)  # Cast tensor to Float
         x = F.relu(self.conv1(x, edge_index))
         x = self.conv2(x, edge_index)
         return x
 
+class myDecoder(torch.nn.Module):
+    def __init__(self, hidden_dim, output_dim):
+        super(myDecoder, self).__init__()
+        self.linear1 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.linear2 = torch.nn.Linear(hidden_dim, output_dim)
 
-class Decoder(torch.nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(Decoder, self).__init__()
-        self.lin = torch.nn.Linear(in_channels, out_channels)
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
 
-    def forward(self, z):
-        z = self.lin(z)
-        return z
-
-class GAE(torch.nn.Module):
-    def __init__(self, encoder, decoder):
-        super(GAE, self).__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-
-    def reset_parameters(self):
-        self.encoder.reset_parameters()
-        self.decoder.reset_parameters()
+class myGAE(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim):
+        super(myGAE, self).__init__()
+        self.encoder = myEncoder(input_dim, hidden_dim)
+        self.decoder = myDecoder(hidden_dim, output_dim)
 
     def forward(self, x, edge_index):
-        z = self.encoder(x, edge_index)
-        z = F.relu(z)
-        x_hat = self.decoder(z)
-        return x_hat
+        x = self.encoder(x, edge_index)
+        x = self.decoder(x)
+        return x
 
 
-# Load data
-dataset = ZINC('./data/ZINC').shuffle()
-data = dataset[0].to(device)
+data = pickle.load(open('./data/dataset.pkl', 'rb'))
+print(data)
+# get subset of data
+data = data[:10000]
 
-# Define training function
-def train(model, optimizer, loader, criterion):
-    model.train()
-    loss_all = 0
-    for data in loader:
-        data = data.to(device)
-        optimizer.zero_grad()
-        output = model(data.x, data.edge_index)
-        loss = criterion(output, data.x)
-        loss.backward()
-        optimizer.step()
-        loss_all += loss.item() * data.num_graphs
-    return loss_all / len(loader.dataset)
+# Split the data into training and testing sets
+train_data, test_data = train_test_split(data, test_size=0.2, random_state=42)
 
+# Further split the training set into training and validation sets
+train_data, val_data = train_test_split(train_data, test_size=0.2, random_state=42)
 
-# Define testing function
-def test(model, loader, criterion):
-    model.eval()
-    loss_all = 0
-    for data in loader:
-        data = data.to(device)
-        output = model(data.x, data.edge_index)
-        loss = criterion(output, data.x.to(torch.float)) # Cast the data.x to Float
-        loss_all += loss.item() * data.num_graphs
-    return loss_all / len(loader.dataset)
+batch_size = 64
 
+# Create data loaders
+train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True)
+val_loader = DataLoader(val_data, batch_size=batch_size)
+test_loader = DataLoader(test_data, batch_size=batch_size)
 
-# Split data into training and testing sets
-train_data, test_data = train_test_split(dataset, test_size=0.1)
+# Define the model
+gae = myGAE(data.num_features, 16, data.num_features)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+gae = gae.to(device)
 
-# Define data loaders
-train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=128)
-
-# Define model, optimizer, and loss function
-model = GAE(Encoder(dataset.num_features, 64, 32), Decoder(32, dataset.num_features)).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+# Define the loss function
 criterion = torch.nn.MSELoss()
 
-# Train the model and plot training and validation losses
-num_epochs = 100
-train_losses = []
-test_losses = []
-for epoch in range(num_epochs):
-    train_loss = train(model, optimizer, train_loader, criterion)
-    test_loss = test(model, test_loader, criterion)
-    train_losses.append(train_loss)
-    test_losses.append(test_loss)
-    print('Epoch: {:03d}, Train Loss: {:.4f}, Test Loss: {:.4f}'.format(epoch, train_loss, test_loss))
+# Define the optimizer
+optimizer = torch.optim.Adam(gae.parameters(), lr=0.01)
 
-plt.plot(train_losses, label='Training Loss')
-plt.plot(test_losses, label='Test Loss')
-plt.legend()
+# Set the model to training mode
+gae.train()
+
+# Define the number of training epochs
+num_epochs = 10
+
+gae = gae.to(device)
+
+train_losses, val_losses = [], []
+
+# Train loop with validation
+optimizer = torch.optim.Adam(gae.parameters(), lr=0.01)
+criterion = torch.nn.MSELoss()
+best_val_loss = float('inf')
+
+for epoch in range(num_epochs):
+    gae.train()  # set the model to train mode
+    train_loss = 0
+    for batch in train_loader:
+        optimizer.zero_grad()
+        outputs = gae(batch.x.float().to(device), batch.edge_index.to(device))
+        x_hat = outputs
+        loss = criterion(x_hat.float(), batch.x.float().to(device))
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item() * batch.num_graphs
+    
+    train_loss /= len(train_loader.dataset)
+    
+    gae.eval()  # set the model to evaluation mode
+    val_loss = 0
+    for batch in val_loader:
+        with torch.no_grad():
+            x_hat = gae(batch.x.float().to(device), batch.edge_index.to(device))
+            loss = criterion(x_hat.float(), batch.x.float().to(device))
+            val_loss += loss.item() * batch.num_graphs
+    
+    val_loss /= len(val_loader.dataset)
+
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        torch.save(gae.state_dict(), './data/gae_model.pt')
+
+    train_losses.append(train_loss)
+    val_losses.append(val_loss)
+    print(f"Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
+
+# Plot the training and validation losses
+plt.plot(train_losses, label='Train')
+plt.plot(val_losses, label='Val')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
+plt.legend()
 plt.show()
 
-# Plot the input and output graphs
-data = dataset[0]
-x, edge_index = data.x.to(device), data.edge_index.to(device)
-model.eval()
-with torch.no_grad():
-    z = model.encoder(x, edge_index)
-    z = F.relu(z)
-    x_hat = model.decoder(z)
 
-# Convert the input and output graphs to NetworkX format for plotting
-G_input = to_networkx(Data(x=x, edge_index=edge_index))
-G_output = to_networkx(Data(x=x_hat.cpu(), edge_index=edge_index.cpu()))
 
-# Plot the input and output graphs side-by-side
-fig, axes = plt.subplots(ncols=2, figsize=(10, 5))
-axes[0].set_title('Input Graph')
-axes[1].set_title('Output Graph')
-pos = nx.spring_layout(G_input)
-nx.draw(G_input, pos, with_labels=True, ax=axes[0])
-nx.draw(G_output, pos, with_labels=True, ax=axes[1])
+
+
+gae = myGAE(data.num_features, 16, data.num_features)
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+gae = gae.to(device)
+
+# Load the saved model
+gae.load_state_dict(torch.load('./data/gae_model.pt'))
+
+
+# Convert a PyTorch Geometric graph to a NetworkX graph
+G = to_networkx(batch, to_undirected=True)
+
+# Plot the input graph
+plt.figure(figsize=(20, 8))
+pos = nx.spring_layout(G, seed=42)
+nx.draw(G, pos, node_size=50, with_labels=True)
+plt.title('Input Graph')
+plt.show()
+
+# Evaluate the trained model on the test set
+gae.eval()
+outputs = []
+for batch in test_loader:
+    with torch.no_grad():
+        output = gae(batch.x.float().to(device), batch.edge_index.to(device))
+        output = output.cpu().numpy().tolist()
+        outputs += output
+
+# Convert the output to a list of edges
+edges = []
+for output in outputs:
+    edges.append([(i, j) for i, j in enumerate(output) if j > 0.5])
+
+# Create a new NetworkX graph object
+output_graph = nx.Graph()
+
+# Add nodes to the graph
+output_graph.add_nodes_from(range(data.num_features))
+
+# Add edges to the graph
+for e in edges:
+    output_graph.add_edges_from(e)
+
+# Plot the output graph
+plt.figure(figsize=(8, 8))
+pos = nx.spring_layout(output_graph, seed=42)
+nx.draw(output_graph, pos, node_size=50, with_labels=True)
+plt.title('Output Graph')
 plt.show()
