@@ -1,37 +1,125 @@
 import pickle
 import torch
 import torch.nn.functional as F
+import torch_geometric.nn as gnn
 from torch_geometric.nn import GCNConv
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 
+import argparse
 
-class GCNConv(MessagePassing):
-    def __init__(self, in_channels, out_channels):
-        super(GCNConv, self).__init__(aggr='add')
-        self.lin = torch.nn.Linear(in_channels, out_channels)
+# import dgl
+# import dgl.nn as dglnn
 
-    def forward(self, x, edge_index):
-        # Step 1: Add self-loops
-        edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
+# import torch
+import torch.nn as nn
+# import torch.nn.functional as F
+# from dgl import AddSelfLoop
+# from dgl.data import CiteseerGraphDataset, CoraGraphDataset, PubmedGraphDataset
 
-        # Step 2: Multiply with weights
-        x = self.lin(x)
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        # Step 3: Calculate the normalization
-        row, col = edge_index
-        deg = degree(row, x.size(0), dtype=x.dtype)
-        deg_inv_sqrt = deg.pow(-0.5)
-        norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
+with open("data\dataset.pkl", "rb") as f:
+    dataset = pickle.load(f)
 
-        # Step 4: Propagate the embeddings to the next layer
-        return self.propagate(edge_index, size=(x.size(0), x.size(0)), x=x,
-                              norm=norm)
+class GCN(nn.Module):
+    def __init__(self, in_size, hid_size, out_size):
+        super().__init__()
+        self.layers = nn.ModuleList()
+        # two-layer GCN
+        self.layers.append(
+            gnn.GraphConv(in_size, hid_size, activation=F.relu)
+        )
+        self.layers.append(gnn.GraphConv(hid_size, out_size))
+        self.dropout = nn.Dropout(0.5)
 
-    def message(self, x_j, norm):
-        # Normalize node features.
-        return norm.view(-1, 1) * x_j
+    def forward(self, g, features):
+        h = features
+        for i, layer in enumerate(self.layers):
+            if i != 0:
+                h = self.dropout(h)
+            h = layer(g, h)
+        return h
 
 
-edge_index = dataset
+def evaluate(g, features, labels, mask, model):
+    model.eval()
+    with torch.no_grad():
+        logits = model(g, features)
+        logits = logits[mask]
+        labels = labels[mask]
+        _, indices = torch.max(logits, dim=1)
+        correct = torch.sum(indices == labels)
+        return correct.item() * 1.0 / len(labels)
+
+
+def train(g, features, labels, model):
+    # define train/val samples, loss function and optimizer
+    # train_mask = masks[0]
+    # val_mask = masks[1]
+    loss_fcn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2, weight_decay=5e-4)
+
+    # training loop
+    for epoch in range(200):
+        model.train()
+        logits = model(g, features)
+        # loss = loss_fcn(logits[train_mask], labels[train_mask])
+        loss = loss_fcn(logits, labels)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        acc = evaluate(g, features, labels, val_mask, model)
+        print(
+            "Epoch {:05d} | Loss {:.4f} | Accuracy {:.4f} ".format(
+                epoch, loss.item(), acc
+            )
+        )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="cora",
+        help="Dataset name ('cora', 'citeseer', 'pubmed').",
+    )
+    args = parser.parse_args()
+    print(f"Training with torch_geometric built-in GraphConv module.")
+
+    # load and preprocess dataset
+    transform = (
+        add_self_loops(dataset.edge_index)
+    )  # by default, it will first remove self-loops to prevent duplication
+    # if args.dataset == "cora":
+    #     data = CoraGraphDataset(transform=transform)
+    # elif args.dataset == "citeseer":
+    #     data = CiteseerGraphDataset(transform=transform)
+    # elif args.dataset == "pubmed":
+    #     data = PubmedGraphDataset(transform=transform)
+    # else:
+    #     raise ValueError("Unknown dataset: {}".format(args.dataset))
+
+    # g = data[0]
+
+    g = dataset[0]
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    g = g.to(device)
+    features = g["x"]
+    labels = g["y"]
+
+    # create GCN model
+    in_size = features.shape[1]
+    out_size = dataset.num_classes
+    model = GCN(in_size, 16, out_size).to(device)
+
+    # model training
+    print("Training...")
+    train(g, features, labels, model)
+
+    # test the model
+    print("Testing...")
+    acc = evaluate(g, features, labels, masks[2], model)
+    print("Test accuracy {:.4f}".format(acc))
