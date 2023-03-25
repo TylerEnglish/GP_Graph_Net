@@ -30,6 +30,7 @@ print("Node features shape:", data.x.shape)
 print("Edge features shape:", data.edge_attr.shape)
 print("Target value:", data.y)
 print(data)
+print(data.features)
 
 # Demonstrate how to access specific nodes and edges in the graph
 print(data.x[:1].shape) # Access the first node's features
@@ -47,13 +48,13 @@ print(type(data))
 networkx_graph = to_networkx(data)
 print(type(networkx_graph))
 
-# Visualize multiple graphs
-n = 10
-for i in range(n):
-    data = dataset[i]
-    networkx_graph = to_networkx(data)
-    nx.draw_networkx(networkx_graph)
-    plt.show()
+# # Visualize multiple graphs
+# n = 10
+# for i in range(n):
+#     data = dataset[i]
+#     networkx_graph = to_networkx(data)
+#     nx.draw_networkx(networkx_graph)
+#     plt.show()
 
 # Read a CSV file using Pandas
 try:
