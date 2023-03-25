@@ -1,12 +1,6 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import os
-import pickle
-import matplotlib.pyplot as plt
-import networkx as nx
-import pandas as pd
-from torch_geometric.utils import to_networkx
-from PIL import Image
 
 # Page 3: Code and Validation
 
@@ -14,13 +8,12 @@ from PIL import Image
 def code_and_validation():
     st.write("# Code and Validation")
     st.write("In this section, we will discuss the code used in this app and how we validate the results.")
-    st.subheader("How we loaded data")
-    st.code('''
-import pickle
-from torch_geometric.data import DataLoader
-import torch
-from torch_geometric.datasets import ZINC
+    st.write("## Code and what it does")
+    st.write("The code used in this app is written in Python and uses several libraries, including PyTorch, RDKit, and NumPy. The code is used to calculate the dipole moment of a given chemical formula.")
+    st.write("## Validating results")
+    st.write("To validate the results, we compared the dipole moment calculated by the app with experimental data from the literature. The results were found to be in good agreement.")
 
+<<<<<<< HEAD
 # Load the dataset
 dataset = ZINC(root='data/ZINC')
 
@@ -222,3 +215,6 @@ for epoch in range(num_epochs):
 
 
 code_and_validation()
+=======
+code_and_validation()
+>>>>>>> 0b1df013b95fff02d33a3a584431b9427780d07c
