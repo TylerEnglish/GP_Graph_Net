@@ -48,11 +48,16 @@ print(type(networkx_graph))
 
 # Visualize multiple graphs
 n = 10
+fig = plt.figure(figsize=(20, 15))
 for i in range(n):
+    plt.subplot(2, 5, i+1)
     data = dataset[i]
     networkx_graph = to_networkx(data)
     nx.draw_networkx(networkx_graph)
-    plt.show()
+
+plt.savefig(f'./data/pics/data_charts.png')
+
+
 
 # Read a CSV file using Pandas
 try:

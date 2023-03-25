@@ -20,3 +20,6 @@ def demonstration():
 def calculate_dipole_moment(chemical_formula):
     # Code to calculate the dipole moment
     return
+
+
+demonstration()
