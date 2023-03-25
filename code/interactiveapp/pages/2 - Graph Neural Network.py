@@ -21,6 +21,8 @@ def graph_neural_network():
     st.write("In the decoder stage, GAE reconstructs the adjacency matrix of the graph from the learned node embeddings. This is achieved using a different neural network that takes as input the node embeddings and outputs a reconstructed adjacency matrix.")
     st.write("By training the GAE to reconstruct the adjacency matrix, the model learns to encode the graph's structural information into the low-dimensional embeddings. The node embeddings can then be used for various downstream tasks, such as node classification or link prediction.")
 
+
+graph_neural_network()
 # def load_lottieurl(url):
 #     r = requests.get(url)
 #     if r.status_code != 200:

@@ -1,10 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import os
-from visual_displays.welcome import welcome_page
-from visual_displays.gnn import graph_neural_network
-from visual_displays.code import code_and_validation
-from visual_displays.demo import demonstration
+# from visual_displays.welcome import welcome_page
+# from visual_displays.gnn import graph_neural_network
+# from visual_displays.code import code_and_validation
+# from visual_displays.demo import demonstration
 
 # Sidebar Section
 st.sidebar.header("Quantum Chemistry")
@@ -23,15 +23,15 @@ st.sidebar.header("Quantum Chemistry")
 # if button4:
 #     demonstration()
 
-with st.sidebar:
-    add_radio = st.radio("Select a page", ("Welcome Page",
-                         "What is a Graph Neural Network", "Code and Validation", "Demonstration"))
+# with st.sidebar:
+#     add_radio = st.radio("Select a page", ("Welcome Page",
+#                          "What is a Graph Neural Network", "Code and Validation", "Demonstration"))
 
-if add_radio == "What is a Graph Neural Network":
-    graph_neural_network()
-elif add_radio == "Code and Validation":
-    code_and_validation()
-elif add_radio == "Demonstration":
-    demonstration()
-else:
-    welcome_page()
+# if add_radio == "What is a Graph Neural Network":
+#     graph_neural_network()
+# elif add_radio == "Code and Validation":
+#     code_and_validation()
+# elif add_radio == "Demonstration":
+#     demonstration()
+# else:
+#     welcome_page()
