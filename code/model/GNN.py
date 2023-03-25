@@ -34,4 +34,3 @@ class GCNConv(MessagePassing):
         return norm.view(-1, 1) * x_j
 
 
-edge_index = dataset
