@@ -1,3 +1,6 @@
 torch_geometric
 torch
 rdkit
+streamlit
+matplotlib
+pandas
